@@ -1,4 +1,3 @@
-
 # DevOps: Guía Completa de Jira y Git
 
 ## ¿Qué es DevOps?
@@ -473,3 +472,148 @@ La integración de Jira y Git en un entorno DevOps proporciona:
 - **🚀 Entrega más rápida** y confiable
 
 Esta integración es fundamental para implementar prácticas DevOps exitosas y mantener la calidad del software mientras se acelera la entrega.
+
+## Timing de GitHub Actions Workflows
+
+### ⚠️ Diferencia importante entre `pull_request` y `push`
+
+Es crucial entender cuándo se ejecutan los workflows:
+
+#### `pull_request` - Se ejecuta ANTES del merge:
+- Al crear el Pull Request
+- Al actualizar el Pull Request con nuevos commits
+- **NO se ejecuta después del merge**
+
+#### `push` - Se ejecuta DESPUÉS del merge:
+- Cuando se hace push directo a la rama
+- **Después de hacer merge del Pull Request**
+
+### Ejemplo de workflow mal configurado:
+
+```yaml
+# ❌ INCORRECTO: Solo se ejecuta en PR, no después del merge
+name: Deploy to GitHub Pages
+on:
+  pull_request:
+    branches: [ "main" ]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy
+        run: echo "Esto NO se ejecuta después del merge"
+```
+
+### Ejemplo de workflow corregido:
+
+```yaml
+# ✅ CORRECTO: Se ejecuta después del merge
+name: Build and Deploy static content to Pages
+on:
+  # Para validaciones ANTES del merge
+  pull_request:
+    branches: [ "main" ]
+  
+  # Para deployment DESPUÉS del merge
+  push:
+    branches: [ "main" ]
+  
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # Job para validaciones (solo en PR)
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run tests
+        run: echo "Running tests before merge"
+      
+      - name: Markdown Linting Action
+        uses: avto-dev/markdown-lint@v1.5.0
+
+  # Job para deployment (solo después del merge)
+  deploy:
+    if: github.event_name == 'push'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+```
+
+### Flujo completo recomendado:
+
+```yaml
+name: CI/CD Pipeline
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  # 🧪 Testing (en PR y push)
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run linting
+        uses: avto-dev/markdown-lint@v1.5.0
+      - name: Run tests
+        run: echo "Tests passed"
+
+  # 🚀 Deploy (solo después del merge)
+  deploy:
+    if: github.event_name == 'push'
+    needs: test
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+```
+
+### Diagrama de flujo:
+
+```
+1. Developer crea PR → Ejecuta job 'test' (validaciones)
+2. Code review → Más ejecuciones de 'test' si hay cambios
+3. Merge PR → Ejecuta jobs 'test' + 'deploy' (deployment)
+```
