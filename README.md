@@ -473,3 +473,5 @@ La integración de Jira y Git en un entorno DevOps proporciona:
 - **🚀 Entrega más rápida** y confiable
 
 Esta integración es fundamental para implementar prácticas DevOps exitosas y mantener la calidad del software mientras se acelera la entrega.
+
+Este es el cambio local que le estoy agregando.
