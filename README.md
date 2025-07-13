@@ -1,4 +1,3 @@
-
 # DevOps: Guía Completa de Jira y Git
 
 ## ¿Qué es DevOps?
